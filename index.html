@@ -209,9 +209,18 @@
       .pop{animation:none}
     }
 
-    /* Modal en ligne */
-    .modal{position:fixed;inset:0;display:grid;place-items:center;background:rgb(0 0 0 / .35);backdrop-filter:saturate(120%) blur(2px);opacity:0;pointer-events:none;transition:opacity var(--t-slow) ease;z-index:50}
-    .modal[open]{opacity:1;pointer-events:auto}
+    /* === Modale en ligne (scroll indépendant + scroll lock) === */
+    .modal{
+      position:fixed; inset:0;
+      display:grid; place-items:center;
+      background:rgb(0 0 0 / .35);
+      backdrop-filter:saturate(120%) blur(2px);
+      opacity:0; pointer-events:none;
+      transition:opacity var(--t-slow) ease; z-index:50;
+      /* Empêche le scrolling/bounce de se propager à la page derrière */
+      overscroll-behavior: contain;
+    }
+    .modal[open]{opacity:1; pointer-events:auto}
     .modal-card{
       width:min(100%, 720px);
       margin:0 var(--s-3);
@@ -223,6 +232,11 @@
       padding: clamp(var(--s-4), 3vw, var(--s-6));
       display:grid; gap: var(--s-3);
       position:relative;
+      /* >>> Scroll interne pour mobile <<< */
+      max-height: min(92svh, 92dvh);
+      overflow: auto;
+      -webkit-overflow-scrolling: touch;
+      overscroll-behavior: contain;
     }
     .modal-card header{display:flex;align-items:center;justify-content:space-between;gap:12px}
     .modal-card h2{margin:0;font-size:clamp(1rem,.9rem + .9vw,1.35rem)}
@@ -242,6 +256,8 @@
     .note{font-size:.9rem;opacity:.8}
     .closebtn{position:absolute;top:12px;right:12px}
 
+    /* === Scroll lock quand modale ouverte === */
+    html.modal-open, body.modal-open{overflow:hidden; height:100%}
     /* === Fallback sans OKLCH / color-mix === */
     @supports not (color: oklch(50% 0 0)) or not (background: color-mix(in oklab, #000 10%, transparent)) {
       :root{
@@ -427,7 +443,7 @@
       </section>
 
       <p class="note">
-        Lien = plus simple. S’il est trop long pour une messagerie, utilisez les codes texte juste au-dessus.
+        Lien = plus simple. S’il est trop long pour une messagerie, utilisez les codes texte juste au‑dessus.
         Pas de serveur TURN ici : si le réseau est trop strict, la connexion P2P peut échouer — rejouez en local.
       </p>
     </div>
@@ -599,7 +615,6 @@
       clearTimeout(showToast._t);
       showToast._t = setTimeout(()=>toastEl.classList.remove('show'), 1300);
     }
-    // Copie robuste (Clipboard API + fallback execCommand + prompt)
     async function copyAny(text, el){
       try{
         await navigator.clipboard.writeText(text);
@@ -607,7 +622,6 @@
         showToast('Lien copié');
         return true;
       }catch(e){
-        // fallback
         try{
           const ta = document.createElement('textarea');
           ta.value = text;
@@ -619,19 +633,14 @@
           document.body.removeChild(ta);
           if(ok){ showToast('Lien copié'); return true; }
         }catch{}
-        // Dernier recours
         prompt('Copie ce texte :', text);
         return false;
       }
     }
     async function shareUrlOrCopy(url, el, text=''){
       if(navigator.share){
-        try{
-          await navigator.share({url, text});
-          return true;
-        }catch(e){
-          // annulé ou non support de la taille → on tente la copie
-        }
+        try{ await navigator.share({url, text}); return true; }
+        catch(e){} // fallback copie
       }
       return copyAny(url, el);
     }
@@ -644,13 +653,8 @@
       return btoa(bin);
     };
     function toUrlSafe(b64){ return b64.replaceAll('+','-').replaceAll('/','_').replace(/=+$/,''); }
-    function fromUrlSafe(b64u){
-      let s = b64u.replaceAll('-','+').replaceAll('_','/');
-      while(s.length % 4) s += '=';
-      return s;
-    }
-    function decode(str) {
-      // accepte base64 classique ou base64url
+    function fromUrlSafe(b64u){ let s=b64u.replaceAll('-','+').replaceAll('_','/'); while(s.length%4)s+='='; return s; }
+    function decode(str){
       const std = /^[A-Za-z0-9+/=]+$/.test(str.trim()) ? str.trim() : fromUrlSafe(str.trim());
       const bin = atob(std);
       const bytes = new Uint8Array([...bin].map(ch=>ch.charCodeAt(0)));
@@ -658,27 +662,16 @@
       return JSON.parse(json);
     }
 
-    // Liens d’invitation / réponse (hash pour éviter les logs côté serveur)
-    const baseLink = () => {
-      const u = new URL(location.href);
-      u.search = ''; // on nettoie
-      u.hash = '';
-      return u.toString();
-    };
+    const baseLink = () => { const u=new URL(location.href); u.search=''; u.hash=''; return u.toString(); };
     const makeInviteLink = (payload) => `${baseLink()}#offer=${toUrlSafe(encode(payload))}`;
     const makeAnswerLink = (payload) => `${baseLink()}#answer=${toUrlSafe(encode(payload))}`;
 
     // === Persistence ===
     function save(){
       try{
-        localStorage.setItem(STORAGE_KEY, JSON.stringify({
-          scores: state.scores,
-          sounds: state.sounds,
-          starter: state.starter,
-          board: state.board,
-          player: state.player,
-          moves: state.moves,
-          history: state.history
+        localStorage.setItem('ttt+', JSON.stringify({
+          scores: state.scores, sounds: state.sounds, starter: state.starter,
+          board: state.board, player: state.player, moves: state.moves, history: state.history
         }));
       }catch{}
       renderScores(); updateSoundUI();
@@ -712,7 +705,7 @@
     }
     function load(){
       try{
-        const raw = localStorage.getItem(STORAGE_KEY);
+        const raw = localStorage.getItem('ttt+');
         if(raw){
           const d = JSON.parse(raw);
           if(d.scores) state.scores = d.scores;
@@ -730,13 +723,7 @@
     // === Jeu (source: 'local' | 'remote') ===
     function placeMark(idx, source='local'){
       if(state.lock || state.board[idx]) return;
-
-      if(source==='local' && online.connected){
-        if(state.player !== online.side){
-          Audio.ping(280,.05); haptic(8);
-          return;
-        }
-      }
+      if(source==='local' && online.connected && state.player !== online.side){ return; }
 
       emptyState.classList.add('hide'); undoBtn.disabled = false;
 
@@ -744,9 +731,6 @@
       cells[idx].innerHTML = svgMark(state.player);
       cells[idx].setAttribute('aria-label', `Case ${idx+1}, ${state.player}`);
       cells[idx].disabled = true;
-
-      Audio.ping(state.player==='X' ? 560 : 420);
-      haptic(10);
 
       const win = checkWin();
       if(win){ endGame(win, source); }
@@ -757,132 +741,113 @@
       }
       updateProgress(); save();
 
-      if(online.connected && source==='local'){
-        send({t:'move', i: idx});
-      }
+      if(online.connected && source==='local'){ send({t:'move', i: idx}); }
     }
     function checkWin(){
-      for(const [a,b,c] of WINS){
-        const v = state.board[a];
-        if(v && v===state.board[b] && v===state.board[c]) return {combo:[a,b,c], player:v};
-      }
+      for(const [a,b,c] of WINS){ const v=state.board[a]; if(v&&v===state.board[b]&&v===state.board[c]) return{combo:[a,b,c],player:v} }
       return null;
     }
     function endGame(result, source='local'){
       state.lock = true;
       if(result){
         state.scores[result.player]++; animateNum(result.player==='X' ? xScoreEl : oScoreEl);
-        setTurnLabel(`Victoire de <strong>${result.player}</strong> !`);
-        for(const i of result.combo){
-          cells[i].classList.add('win');
-          cells[i].setAttribute('aria-label', `Case ${i+1}, ${state.board[i]}, gagnante`);
-        }
-        Audio.ping(760,.09); setTimeout(()=>Audio.ping(940,.09),80); haptic([12,60,12]);
-      }else{
-        state.scores.D++; animateNum(dScoreEl);
-        setTurnLabel(`Match <strong>nul</strong>.`);
-        Audio.ping(300,.1); setTimeout(()=>Audio.ping(240,.12),60); haptic([10,40,10]);
-      }
+        for(const i of result.combo){ cells[i].classList.add('win'); cells[i].setAttribute('aria-label', `Case ${i+1}, ${state.board[i]}, gagnante`); }
+      }else{ state.scores.D++; animateNum(dScoreEl); }
       cells.forEach(c => c.disabled = true);
       state.starter = state.starter==='X' ? 'O' : 'X';
+      setTurnLabel(result ? `Victoire de <strong>${result.player}</strong> !` : `Match <strong>nul</strong>.`);
       setTimeout(()=>resetBtn.focus(),120);
       save();
-
-      if(online.connected && source==='local'){
-        send({t:'end'});
-      }
+      if(online.connected && source==='local'){ send({t:'end'}); }
     }
     function resetBoard(keepScores=true, source='local'){
-      state.board.fill(null);
-      state.moves = 0;
-      state.player = state.starter;
-      state.lock = false;
-      state.history.length = 0;
-
-      cells.forEach((c,i)=>{
-        c.innerHTML=''; c.classList.remove('win'); c.disabled=false;
-        c.setAttribute('aria-label',`Case ${i+1}`);
-      });
-      setTurnLabel(`C’est à <strong>${state.player}</strong> de jouer.`);
-      updateProgress();
-
+      state.board.fill(null); state.moves=0; state.player=state.starter; state.lock=false; state.history.length=0;
+      cells.forEach((c,i)=>{ c.innerHTML=''; c.classList.remove('win'); c.disabled=false; c.setAttribute('aria-label',`Case ${i+1}`) });
+      setTurnLabel(`C’est à <strong>${state.player}</strong> de jouer.`); updateProgress();
       if(!keepScores){ state.scores={X:0,O:0,D:0}; state.starter='X'; renderScores(); }
-      emptyState.classList.remove('hide'); undoBtn.disabled = true; save();
-
-      if(online.connected && source==='local'){
-        send({t:'reset', keepScores});
-      }
+      emptyState.classList.remove('hide'); undoBtn.disabled=true; save();
+      if(online.connected && source==='local'){ send({t:'reset', keepScores}); }
     }
     function undo(source='local'){
       if(state.history.length===0) return;
-      state.lock = false;
-
-      const idx = state.history.pop();
-      state.board[idx] = null; state.moves--;
-      cells[idx].innerHTML=''; cells[idx].classList.remove('win'); cells[idx].disabled=false;
+      state.lock=false;
+      const idx=state.history.pop();
+      state.board[idx]=null; state.moves--; cells[idx].innerHTML=''; cells[idx].classList.remove('win'); cells[idx].disabled=false;
       cells[idx].setAttribute('aria-label', `Case ${idx+1}`);
-
-      state.player = state.player==='X' ? 'O' : 'X';
-      setTurnLabel(`C’est à <strong>${state.player}</strong> de jouer.`);
-      updateProgress(); save();
-      if(state.history.length===0) undoBtn.disabled = true;
-
-      if(online.connected && source==='local'){
-        send({t:'undo'});
-      }
+      state.player=state.player==='X'?'O':'X';
+      setTurnLabel(`C’est à <strong>${state.player}</strong> de jouer.`); updateProgress(); save();
+      if(state.history.length===0)undoBtn.disabled=true;
+      if(online.connected && source==='local'){ send({t:'undo'}); }
     }
 
     // === Interactions plateau ===
     boardEl.addEventListener('click', e=>{
-      const btn = e.target.closest('.cell'); if(!btn) return;
-      placeMark(+btn.dataset.index, 'local');
+      const btn = e.target.closest('.cell'); if(!btn) return; placeMark(+btn.dataset.index, 'local');
     });
     boardEl.addEventListener('keydown', e=>{
-      const current = document.activeElement.closest('.cell'); if(!current) return;
-      const idx = +current.dataset.index;
-      if(e.key==='Enter' || e.key===' '){ e.preventDefault(); placeMark(idx, 'local'); return; }
-      if(e.key==='ArrowRight' || e.key==='ArrowLeft' || e.key==='ArrowDown' || e.key==='ArrowUp'){
+      const current=document.activeElement.closest('.cell'); if(!current) return;
+      const idx=+current.dataset.index;
+      if(e.key==='Enter'||e.key===' '){ e.preventDefault(); placeMark(idx, 'local'); return; }
+      if(['ArrowRight','ArrowLeft','ArrowDown','ArrowUp'].includes(e.key)){
         e.preventDefault();
-        let next = idx;
+        let next=idx;
         for(let i=0;i<9;i++){
-          next = e.key==='ArrowRight' ? (next%3<2?next+1:next-2)
-               : e.key==='ArrowLeft'  ? (next%3>0?next-1:next+2)
-               : e.key==='ArrowDown'  ? (next<6?next+3:next-6)
-               : /* ArrowUp */          (next>2?next-3:next+6);
+          next = e.key==='ArrowRight'?(next%3<2?next+1:next-2)
+               : e.key==='ArrowLeft' ?(next%3>0?next-1:next+2)
+               : e.key==='ArrowDown' ?(next<6?next+3:next-6)
+               :                        (next>2?next-3:next+6);
           if(!cells[next].disabled){ cells[next].focus(); break; }
         }
       }
     });
     window.addEventListener('keydown', e=>{
-      if(e.target.closest('input,textarea,select,button,[contenteditable]')) return;
-      if((e.key==='z'||e.key==='Z') && (e.ctrlKey || !e.metaKey) && !e.shiftKey){ e.preventDefault(); undo('local'); }
-      if(e.key==='r'||e.key==='R'){ e.preventDefault(); resetBoard(true,'local'); }
+      if(e.target.closest('input,textarea,select,button,[contenteditable]'))return;
+      if((e.key==='z'||e.key==='Z')&&(e.ctrlKey||!e.metaKey)&&!e.shiftKey){e.preventDefault();undo('local');}
+      if(e.key==='r'||e.key==='R'){e.preventDefault();resetBoard(true,'local');}
     });
 
-    resetBtn.addEventListener('click', ()=>resetBoard(true,'local'));
-    resetSeriesBtn.addEventListener('click', ()=>{
-      if(confirm('Réinitialiser la série (scores + plateau) ?')) resetBoard(false,'local');
-    });
-    undoBtn.addEventListener('click', ()=>undo('local'));
-    soundBtn.addEventListener('click', ()=>{
-      state.sounds = !state.sounds;
-      updateSoundUI(); save();
-    });
+    resetBtn.addEventListener('click',()=>resetBoard(true,'local'));
+    resetSeriesBtn.addEventListener('click',()=>{ if(confirm('Réinitialiser la série (scores + plateau) ?')) resetBoard(false,'local'); });
+    undoBtn.addEventListener('click',()=>undo('local'));
+    soundBtn.addEventListener('click',()=>{ state.sounds=!state.sounds; updateSoundUI(); save(); });
 
-    // === Modal (a11y + focus trap) ===
+    // === Modal (a11y + focus trap + scroll lock) ===
     let prevFocus=null;
+    const scrollLock={active:false,y:0};
+    function lockScroll(){
+      if(scrollLock.active) return;
+      scrollLock.y = window.scrollY || document.documentElement.scrollTop || 0;
+      document.documentElement.classList.add('modal-open');
+      document.body.classList.add('modal-open');
+      // Fix iOS : body en position:fixed pour empêcher le scroll derrière
+      document.body.style.position='fixed';
+      document.body.style.top = `-${scrollLock.y}px`;
+      document.body.style.left='0'; document.body.style.right='0'; document.body.style.width='100%';
+      scrollLock.active=true;
+    }
+    function unlockScroll(){
+      if(!scrollLock.active) return;
+      document.body.style.position=''; document.body.style.top=''; document.body.style.left=''; document.body.style.right=''; document.body.style.width='';
+      document.documentElement.classList.remove('modal-open');
+      document.body.classList.remove('modal-open');
+      window.scrollTo(0, scrollLock.y);
+      scrollLock.active=false;
+    }
+
     function openModal(){
       modal.setAttribute('open','');
       modal.removeAttribute('aria-hidden');
       prevFocus = document.activeElement;
       modal.addEventListener('keydown', trapTab);
       nickInput.focus();
+      lockScroll();
     }
     function closeModal(){
       modal.removeAttribute('open');
       modal.setAttribute('aria-hidden','true');
       modal.removeEventListener('keydown', trapTab);
       prevFocus && prevFocus.focus();
+      unlockScroll();
     }
     onlineBtn.addEventListener('click', openModal);
     closeModalBtn.addEventListener('click', closeModal);
@@ -890,9 +855,9 @@
     window.addEventListener('keydown', (e)=>{ if(e.key==='Escape' && modal.hasAttribute('open')) closeModal(); });
     function trapTab(e){
       if(e.key!=='Tab') return;
-      const f = modal.querySelectorAll('button, [href], input, textarea, select, [tabindex]:not([tabindex="-1"])');
+      const f=modal.querySelectorAll('button,[href],input,textarea,select,[tabindex]:not([tabindex="-1"])');
       if(!f.length) return;
-      const first = f[0], last = f[f.length-1];
+      const first=f[0], last=f[f.length-1];
       if(e.shiftKey && document.activeElement===first){ last.focus(); e.preventDefault(); }
       else if(!e.shiftKey && document.activeElement===last){ first.focus(); e.preventDefault(); }
     }
@@ -919,7 +884,7 @@
           online.connected = true;
           setNetChip('Connecté', true);
           startPing();
-          closeModal();
+          // NE FERME PLUS LA MODALE AUTOMATIQUEMENT
         }else if(s==='disconnected'){
           setNetChip('Déconnecté'); stopPing();
         }else if(s==='failed'){
@@ -932,54 +897,31 @@
     function waitIceDone(pc){
       if(pc.iceGatheringState==='complete') return Promise.resolve();
       return new Promise(res=>{
-        function check(){
-          if(pc.iceGatheringState==='complete'){ pc.removeEventListener('icegatheringstatechange', check); res(); }
-        }
+        function check(){ if(pc.iceGatheringState==='complete'){ pc.removeEventListener('icegatheringstatechange', check); res(); } }
         pc.addEventListener('icegatheringstatechange', check);
         setTimeout(()=>res(), 3000);
       });
     }
 
     function send(obj){
-      try{
-        if(online.dc && online.dc.readyState==='open'){
-          online.dc.send(JSON.stringify(obj));
-        }
-      }catch{}
+      try{ if(online.dc && online.dc.readyState==='open'){ online.dc.send(JSON.stringify(obj)); } }catch{}
     }
-    function startPing(){
-      stopPing();
-      online.pingTimer = setInterval(()=>{
-        const ts = Date.now();
-        send({t:'ping', ts});
-      }, 2000);
-    }
+    function startPing(){ stopPing(); online.pingTimer = setInterval(()=>{ const ts=Date.now(); send({t:'ping', ts}); },2000); }
     function stopPing(){ if(online.pingTimer){ clearInterval(online.pingTimer); online.pingTimer=null; } }
 
     function handleMessage(ev){
       let msg; try{ msg = JSON.parse(ev.data); }catch{ return; }
       switch(msg.t){
-        case 'hello':
-          online.peerNick = msg.nick || '';
-          break;
-        case 'sync':
-          if(online.role==='guest'){
-            state = {...state, ...msg.state};
-            hydrateBoard();
-          }
-          break;
+        case 'hello': online.peerNick = msg.nick || ''; break;
+        case 'sync': if(online.role==='guest'){ state = {...state, ...msg.state}; hydrateBoard(); } break;
         case 'move': placeMark(msg.i, 'remote'); break;
         case 'undo': undo('remote'); break;
         case 'reset': resetBoard(!!msg.keepScores, 'remote'); break;
         case 'end': break;
         case 'ping': send({t:'pong', ts: msg.ts}); break;
-        case 'pong':
-          online.ping = Math.max(0, Date.now() - msg.ts);
-          setNetChip(`Connecté • ${online.ping} ms`, true);
-          break;
+        case 'pong': online.ping = Math.max(0, Date.now()-msg.ts); setNetChip(`Connecté • ${online.ping} ms`, true); break;
       }
     }
-
     function setupDC(dc){
       online.dc = dc;
       dc.addEventListener('open', ()=>{
@@ -994,133 +936,72 @@
       dc.addEventListener('close', ()=>{ setNetChip('Hors ligne'); stopPing(); online.connected=false; updatePlayableHint(); });
       dc.addEventListener('error', ()=>{ setNetChip('Erreur'); });
     }
-
     function teardownOnline(){
       try{ online.dc && online.dc.close(); }catch{}
       try{ online.pc && online.pc.close(); }catch{}
       online.dc = null; online.pc = null; online.connected=false; online.role=null;
-      setNetChip('Hors ligne');
-      updatePlayableHint();
+      setNetChip('Hors ligne'); updatePlayableHint();
     }
 
     // — Hôte (X)
     hostCreateBtn.addEventListener('click', async ()=>{
-      teardownOnline();
-      online.role='host'; online.side='X'; online.enabled=true;
-      updatePlayableHint();
-      const pc = online.pc = newPC();
-      const dc = pc.createDataChannel('game');
-      setupDC(dc);
-
-      const offer = await pc.createOffer();
-      await pc.setLocalDescription(offer);
-      await waitIceDone(pc);
-
+      teardownOnline(); online.role='host'; online.side='X'; online.enabled=true; updatePlayableHint();
+      const pc = online.pc = newPC(); const dc = pc.createDataChannel('game'); setupDC(dc);
+      const offer = await pc.createOffer(); await pc.setLocalDescription(offer); await waitIceDone(pc);
       const payload = {type:'offer', sdp: pc.localDescription.sdp, v:1};
       const b64 = encode(payload);
-      hostOfferTA.value = toUrlSafe(b64); // lisible/utilisable aussi en code
-      const link = makeInviteLink(payload);
-      hostOfferLinkTA.value = link;
-      hostCopyLinkBtn.disabled = false;
-      hostShareBtn.disabled = false;
-      applyAnswerBtn.disabled = false;
+      hostOfferTA.value = toUrlSafe(b64);
+      const link = makeInviteLink(payload); hostOfferLinkTA.value = link;
+      hostCopyLinkBtn.disabled = false; hostShareBtn.disabled = false; applyAnswerBtn.disabled = false;
       setNetChip('En attente de réponse…');
     });
-
-    hostCopyLinkBtn.addEventListener('click', async ()=>{
-      if(!hostOfferLinkTA.value) return;
-      await copyAny(hostOfferLinkTA.value, hostCopyLinkBtn);
-    });
-    hostShareBtn.addEventListener('click', async ()=>{
-      if(!hostOfferLinkTA.value) return;
-      await shareUrlOrCopy(hostOfferLinkTA.value, hostShareBtn, 'Rejoins ma partie de Tic‑Tac‑Toe+');
-    });
-
+    hostCopyLinkBtn.addEventListener('click', async ()=>{ if(!hostOfferLinkTA.value) return; await copyAny(hostOfferLinkTA.value, hostCopyLinkBtn); });
+    hostShareBtn.addEventListener('click', async ()=>{ if(!hostOfferLinkTA.value) return; await shareUrlOrCopy(hostOfferLinkTA.value, hostShareBtn, 'Rejoins ma partie de Tic‑Tac‑Toe+'); });
     applyAnswerBtn.addEventListener('click', async ()=>{
       const raw = guestAnswerTA.value.trim(); if(!raw) return;
       try{
-        const ans = decode(raw); // accepte base64 ou base64url
-        if(ans.type!=='answer') throw new Error('Type invalide');
+        const ans = decode(raw); if(ans.type!=='answer') throw new Error('Type invalide');
         await online.pc.setRemoteDescription({type:'answer', sdp: ans.sdp});
-        // Nettoie le hash “answer” si présent
-        history.replaceState(null,'',location.pathname + location.search);
+        history.replaceState(null,'',location.pathname + location.search); // nettoie #answer
         setNetChip('Connexion…');
-      }catch(e){
-        alert('Réponse invalide.');
-      }
+        // NE PAS fermer la modale ici
+      }catch(e){ alert('Réponse invalide.'); }
     });
 
     // — Invité (O)
     joinApplyOfferBtn.addEventListener('click', async ()=>{
       const raw = hostOfferInputTA.value.trim(); if(!raw) return;
       try{
-        teardownOnline();
-        online.role='guest'; online.side='O'; online.enabled=true;
-        updatePlayableHint();
-        const pc = online.pc = newPC();
-        pc.ondatachannel = (e)=> setupDC(e.channel);
-
-        const offer = decode(raw);
-        if(offer.type!=='offer') throw new Error('Type invalide');
+        teardownOnline(); online.role='guest'; online.side='O'; online.enabled=true; updatePlayableHint();
+        const pc = online.pc = newPC(); pc.ondatachannel = (e)=> setupDC(e.channel);
+        const offer = decode(raw); if(offer.type!=='offer') throw new Error('Type invalide');
         await pc.setRemoteDescription({type:'offer', sdp: offer.sdp});
-        const answer = await pc.createAnswer();
-        await pc.setLocalDescription(answer);
-        await waitIceDone(pc);
-
+        const answer = await pc.createAnswer(); await pc.setLocalDescription(answer); await waitIceDone(pc);
         const payload = {type:'answer', sdp: pc.localDescription.sdp, v:1};
         const b64 = encode(payload);
         joinAnswerTA.value = toUrlSafe(b64);
-        const link = makeAnswerLink(payload);
-        joinAnswerLinkTA.value = link;
-        joinCopyLinkBtn.disabled = true; // on réactive après remplissage setTimeout pour éviter double clic
-        joinShareBtn.disabled = true;
-        setTimeout(()=>{ joinCopyLinkBtn.disabled=false; joinShareBtn.disabled=false; }, 50);
+        const link = makeAnswerLink(payload); joinAnswerLinkTA.value = link;
+        joinCopyLinkBtn.disabled=false; joinShareBtn.disabled=false;
         setNetChip('Réponse prête, envoie le lien à l’hôte.');
-      }catch(e){
-        alert('Invitation invalide.');
-      }
+        // NE PAS fermer la modale ici
+      }catch(e){ alert('Invitation invalide.'); }
     });
-
-    joinCopyLinkBtn.addEventListener('click', async ()=>{
-      if(!joinAnswerLinkTA.value) return;
-      await copyAny(joinAnswerLinkTA.value, joinCopyLinkBtn);
-    });
-    joinShareBtn.addEventListener('click', async ()=>{
-      if(!joinAnswerLinkTA.value) return;
-      await shareUrlOrCopy(joinAnswerLinkTA.value, joinShareBtn, 'Voici ma réponse Tic‑Tac‑Toe+');
-    });
+    joinCopyLinkBtn.addEventListener('click', async ()=>{ if(!joinAnswerLinkTA.value) return; await copyAny(joinAnswerLinkTA.value, joinCopyLinkBtn); });
+    joinShareBtn.addEventListener('click', async ()=>{ if(!joinAnswerLinkTA.value) return; await shareUrlOrCopy(joinAnswerLinkTA.value, joinShareBtn, 'Voici ma réponse Tic‑Tac‑Toe+'); });
 
     // Pseudo
-    try{
-      const savedNick = localStorage.getItem(NICK_KEY);
-      if(savedNick) nickInput.value = savedNick;
-    }catch{}
-    nickInput.addEventListener('input', ()=>{
-      online.nick = nickInput.value.slice(0,40);
-      try{ localStorage.setItem(NICK_KEY, online.nick); }catch{}
-    });
+    try{ const savedNick = localStorage.getItem(NICK_KEY); if(savedNick) nickInput.value = savedNick; }catch{}
+    nickInput.addEventListener('input', ()=>{ online.nick = nickInput.value.slice(0,40); try{ localStorage.setItem(NICK_KEY, online.nick); }catch{} });
 
     // === Deep‑link URL (search/hash) ===
     (function deepLinkOnline(){
       const p = new URLSearchParams(location.search);
       if (p.get('online') === 'host') { openModal(); switchTab('host'); }
       else if (p.get('online') === 'join') { openModal(); switchTab('join'); }
-      // Hash “offer” → préremplir le champ invité
       if(location.hash){
         const hp = new URLSearchParams(location.hash.slice(1));
-        if(hp.get('offer')){
-          const offerStr = hp.get('offer');
-          openModal(); switchTab('join');
-          hostOfferInputTA.value = offerStr; // decode() acceptera base64url
-          // On ne lance pas automatiquement, l’utilisateur reste maître du clic
-        }
-        if(hp.get('answer')){
-          const answerStr = hp.get('answer');
-          openModal(); switchTab('host');
-          guestAnswerTA.value = answerStr; // decode() gère base64url
-          // Auto-validation pour fluidifier (pas de permission requise)
-          applyAnswerBtn.click();
-        }
+        if(hp.get('offer')){ openModal(); switchTab('join'); hostOfferInputTA.value = hp.get('offer'); }
+        if(hp.get('answer')){ openModal(); switchTab('host'); guestAnswerTA.value = hp.get('answer'); applyAnswerBtn.click(); }
       }
     })();
 
