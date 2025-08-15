@@ -181,6 +181,18 @@
     .empty svg{width:56px;height:56px}
     footer{opacity:.8;text-align:center;font-size:.9rem}
 
+    /* Toast */
+    .toast{
+      position:fixed; left:50%; bottom:18px; transform:translateX(-50%) translateY(20px);
+      background: color-mix(in oklab, var(--surface-strong) 95%, transparent);
+      border:1px solid var(--line); border-radius:999px; padding:10px 14px;
+      box-shadow:var(--shadow-soft); backdrop-filter: blur(var(--glass-blur));
+      opacity:0; pointer-events:none;
+      transition:opacity var(--t-med) ease, transform var(--t-med) var(--spring-1);
+      z-index:100;
+    }
+    .toast.show{opacity:1; transform:translateX(-50%) translateY(0)}
+
     /* Tour actif */
     body[data-turn="X"] #xScore{box-shadow:0 0 0 2px color-mix(in oklab, var(--x-color) 70%, transparent) inset}
     body[data-turn="O"] #oScore{box-shadow:0 0 0 2px color-mix(in oklab, var(--o-color) 70%, transparent) inset}
@@ -346,7 +358,7 @@
       <div class="row" style="align-items:flex-end">
         <div style="flex:1">
           <label for="nick">Ton pseudo (facultatif)</label>
-          <input id="nick" type="text" placeholder="Ex. Maria-buster" inputmode="text" autocomplete="nickname" />
+          <input id="nick" type="text" placeholder="Ex. Alex" inputmode="text" autocomplete="nickname" />
         </div>
         <div class="chip" id="sideChip">Tu joueras : X (hôte) · O (invité)</div>
       </div>
@@ -356,59 +368,72 @@
         <button class="t" id="tabJoin" role="tab" aria-selected="false" aria-controls="panelJoin">Rejoindre</button>
       </nav>
 
+      <!-- Panneau Hôte -->
       <section id="panelHost" class="grid" role="tabpanel" aria-labelledby="tabHost">
         <div class="row">
           <button class="btn" id="hostCreateBtn" type="button" title="Créer une offre WebRTC">
             <svg viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.7"><path d="M12 5v14M5 12h14"/></g></svg>
-            Créer une invitation
-          </button>
-          <button class="iconbtn" id="hostCopyBtn" type="button" disabled title="Copier l’invitation">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.7"><rect x="8" y="8" width="10" height="10" rx="2"/><path d="M6 6h8a2 2 0 0 1 2 2v0"/></g></svg>
-            <span class="label">Copier code</span>
-          </button>
-          <button class="iconbtn" id="hostLinkBtn" type="button" title="Copier un lien qui ouvre directement l’onglet Créer">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.7"><path d="M10 13a5 5 0 0 1 0-7l1-1a5 5 0 0 1 7 7l-1 1"/><path d="M14 11a5 5 0 0 1 0 7l-1 1a5 5 0 1 1-7-7l1-1"/></g></svg>
-            <span class="label">Copier lien</span>
+            Créer une invitation (X)
           </button>
         </div>
 
-        <label for="hostOffer">Code d’invitation (envoie à Maria)</label>
+        <label for="hostOffer">Code d’invitation (si besoin)</label>
         <textarea id="hostOffer" readonly placeholder="Clique sur « Créer une invitation »"></textarea>
 
-        <label for="guestAnswer">Colle ici la réponse de Maria</label>
-        <textarea id="guestAnswer" placeholder="Réponse de Maria (coller ici)"></textarea>
+        <div class="row">
+          <label for="hostOfferLink" style="flex:1">Lien d’invitation (plus simple)</label>
+          <button class="iconbtn" id="hostCopyLinkBtn" type="button" disabled title="Copier le lien d’invitation">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.7"><rect x="8" y="8" width="10" height="10" rx="2"/><path d="M6 6h8a2 2 0 0 1 2 2v0"/></g></svg>
+            <span class="label">Copier lien</span>
+          </button>
+          <button class="iconbtn" id="hostShareBtn" type="button" disabled title="Partager">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.7"><path d="M12 5v14M5 12h14"/></g></svg>
+            <span class="label">Partager</span>
+          </button>
+        </div>
+        <textarea id="hostOfferLink" readonly placeholder="Le lien apparaîtra ici après création"></textarea>
+
+        <label for="guestAnswer">Colle ici la réponse de l’invité (ou ouvre son lien de réponse)</label>
+        <textarea id="guestAnswer" placeholder="Réponse de l’invité (coller ici)"></textarea>
         <div class="row">
           <button class="btn" id="applyAnswerBtn" type="button" disabled>Valider la réponse</button>
-          <span class="note">Après connexion, l’hôte joue <b>X</b>, l’invitée joue <b>O</b>.</span>
+          <span class="note">Astuce : si tu ouvres le <b>lien de réponse</b> de l’invité, la validation se fait automatiquement.</span>
         </div>
       </section>
 
+      <!-- Panneau Invité -->
       <section id="panelJoin" class="grid" role="tabpanel" aria-labelledby="tabJoin" hidden>
-        <div class="row">
-          <label for="hostOfferInput" style="flex:1">Colle le code d’invitation reçu</label>
-          <button class="iconbtn" id="joinLinkBtn" type="button" title="Copier un lien qui ouvre directement l’onglet Rejoindre">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.7"><path d="M10 13a5 5 0 0 1 0-7l1-1a5 5 0 0 1 7 7l-1 1"/><path d="M14 11a5 5 0 0 1 0 7l-1 1a5 5 0 1 1-7-7l1-1"/></g></svg>
-            <span class="label">Copier lien</span>
-          </button>
-        </div>
+        <label for="hostOfferInput">Colle l’invitation reçue (ou ouvre directement le lien d’invitation)</label>
         <textarea id="hostOfferInput" placeholder="Invitation de l’hôte (coller ici)"></textarea>
         <div class="row">
-          <button class="btn" id="joinApplyOfferBtn" type="button">Générer ma réponse</button>
-          <button class="iconbtn" id="joinCopyBtn" type="button" disabled title="Copier ma réponse">
+          <button class="btn" id="joinApplyOfferBtn" type="button">Générer ma réponse (O)</button>
+        </div>
+
+        <label for="joinAnswer">Ma réponse (si besoin de texte)</label>
+        <textarea id="joinAnswer" readonly placeholder="Clique d’abord sur « Générer ma réponse »"></textarea>
+
+        <div class="row">
+          <label for="joinAnswerLink" style="flex:1">Lien de réponse (plus simple)</label>
+          <button class="iconbtn" id="joinCopyLinkBtn" type="button" disabled title="Copier le lien de réponse">
             <svg viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.7"><rect x="8" y="8" width="10" height="10" rx="2"/><path d="M6 6h8a2 2 0 0 1 2 2v0"/></g></svg>
-            <span class="label">Copier</span>
+            <span class="label">Copier lien</span>
+          </button>
+          <button class="iconbtn" id="joinShareBtn" type="button" disabled title="Partager">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.7"><path d="M10 13a5 5 0 0 1 0-7l1-1a5 5 0 0 1 7 7l-1 1"/><path d="M14 11a5 5 0 0 1 0 7l-1 1a5 5 0 1 1-7-7l1-1"/></g></svg>
+            <span class="label">Partager</span>
           </button>
         </div>
-        <label for="joinAnswer">Ma réponse (envoie-la à l’hôte)</label>
-        <textarea id="joinAnswer" readonly placeholder="Clique d’abord sur « Générer ma réponse »"></textarea>
+        <textarea id="joinAnswerLink" readonly placeholder="Le lien apparaîtra ici après génération"></textarea>
       </section>
 
       <p class="note">
-        Astuce : l’échange de codes peut se faire par message/QR. Si la connexion échoue, c’est souvent dû au NAT ;
-        un serveur TURN n’est pas utilisé ici. Vous pouvez rejouer en local sans recharger la page.
+        Lien = plus simple. S’il est trop long pour une messagerie, utilisez les codes texte juste au-dessus.
+        Pas de serveur TURN ici : si le réseau est trop strict, la connexion P2P peut échouer — rejouez en local.
       </p>
     </div>
   </div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
   <script>
     // === Sélecteurs ===
@@ -433,6 +458,32 @@
     const soundOnIcon = document.getElementById('soundOn');
     const soundOffIcon = document.getElementById('soundOff');
     const onlineBtn = document.getElementById('onlineBtn');
+
+    const modal = document.getElementById('onlineModal');
+    const closeModalBtn = document.getElementById('closeModal');
+    const nickInput = document.getElementById('nick');
+    const sideChip = document.getElementById('sideChip');
+
+    const tabHost = document.getElementById('tabHost');
+    const tabJoin = document.getElementById('tabJoin');
+    const panelHost = document.getElementById('panelHost');
+    const panelJoin = document.getElementById('panelJoin');
+
+    const hostCreateBtn = document.getElementById('hostCreateBtn');
+    const hostOfferTA = document.getElementById('hostOffer');
+    const hostOfferLinkTA = document.getElementById('hostOfferLink');
+    const hostCopyLinkBtn = document.getElementById('hostCopyLinkBtn');
+    const hostShareBtn = document.getElementById('hostShareBtn');
+
+    const guestAnswerTA = document.getElementById('guestAnswer');
+    const applyAnswerBtn = document.getElementById('applyAnswerBtn');
+
+    const hostOfferInputTA = document.getElementById('hostOfferInput');
+    const joinAnswerTA = document.getElementById('joinAnswer');
+    const joinAnswerLinkTA = document.getElementById('joinAnswerLink');
+    const joinCopyLinkBtn = document.getElementById('joinCopyLinkBtn');
+    const joinShareBtn = document.getElementById('joinShareBtn');
+    const joinApplyOfferBtn = document.getElementById('joinApplyOfferBtn');
 
     const live = document.getElementById('live');
     const WINS = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
@@ -541,12 +592,81 @@
       netChip.textContent = text;
       netChip.classList.toggle('good', good);
     }
-    function hostLink(){ const u=new URL(location.href); u.searchParams.set('online','host'); u.hash=''; return u.toString(); }
-    function joinLink(){ const u=new URL(location.href); u.searchParams.set('online','join'); u.hash=''; return u.toString(); }
-    async function copy(text, el){
-      try{ await navigator.clipboard.writeText(text); if(el){ el.style.opacity='.7'; setTimeout(()=>el.style.opacity='',600); } }
-      catch{}
+    const toastEl = document.getElementById('toast');
+    function showToast(text){
+      toastEl.textContent = text;
+      toastEl.classList.add('show');
+      clearTimeout(showToast._t);
+      showToast._t = setTimeout(()=>toastEl.classList.remove('show'), 1300);
     }
+    // Copie robuste (Clipboard API + fallback execCommand + prompt)
+    async function copyAny(text, el){
+      try{
+        await navigator.clipboard.writeText(text);
+        el && (el.style.opacity='.7', setTimeout(()=>el.style.opacity='',500));
+        showToast('Lien copié');
+        return true;
+      }catch(e){
+        // fallback
+        try{
+          const ta = document.createElement('textarea');
+          ta.value = text;
+          ta.setAttribute('readonly','');
+          ta.style.position='fixed'; ta.style.opacity='0'; ta.style.inset='0';
+          document.body.appendChild(ta);
+          ta.select(); ta.setSelectionRange(0, ta.value.length);
+          const ok = document.execCommand('copy');
+          document.body.removeChild(ta);
+          if(ok){ showToast('Lien copié'); return true; }
+        }catch{}
+        // Dernier recours
+        prompt('Copie ce texte :', text);
+        return false;
+      }
+    }
+    async function shareUrlOrCopy(url, el, text=''){
+      if(navigator.share){
+        try{
+          await navigator.share({url, text});
+          return true;
+        }catch(e){
+          // annulé ou non support de la taille → on tente la copie
+        }
+      }
+      return copyAny(url, el);
+    }
+
+    // === Base64 URL‑safe (supporte base64 et base64url) ===
+    const encode = (obj) => {
+      const json = JSON.stringify(obj);
+      const bytes = new TextEncoder().encode(json);
+      let bin=''; bytes.forEach(b=>bin+=String.fromCharCode(b));
+      return btoa(bin);
+    };
+    function toUrlSafe(b64){ return b64.replaceAll('+','-').replaceAll('/','_').replace(/=+$/,''); }
+    function fromUrlSafe(b64u){
+      let s = b64u.replaceAll('-','+').replaceAll('_','/');
+      while(s.length % 4) s += '=';
+      return s;
+    }
+    function decode(str) {
+      // accepte base64 classique ou base64url
+      const std = /^[A-Za-z0-9+/=]+$/.test(str.trim()) ? str.trim() : fromUrlSafe(str.trim());
+      const bin = atob(std);
+      const bytes = new Uint8Array([...bin].map(ch=>ch.charCodeAt(0)));
+      const json = new TextDecoder().decode(bytes);
+      return JSON.parse(json);
+    }
+
+    // Liens d’invitation / réponse (hash pour éviter les logs côté serveur)
+    const baseLink = () => {
+      const u = new URL(location.href);
+      u.search = ''; // on nettoie
+      u.hash = '';
+      return u.toString();
+    };
+    const makeInviteLink = (payload) => `${baseLink()}#offer=${toUrlSafe(encode(payload))}`;
+    const makeAnswerLink = (payload) => `${baseLink()}#answer=${toUrlSafe(encode(payload))}`;
 
     // === Persistence ===
     function save(){
@@ -712,18 +832,15 @@
       }
     }
 
-    // === Interactions ===
+    // === Interactions plateau ===
     boardEl.addEventListener('click', e=>{
       const btn = e.target.closest('.cell'); if(!btn) return;
       placeMark(+btn.dataset.index, 'local');
     });
-
-    // Navigation fléchée (saute les cases désactivées)
     boardEl.addEventListener('keydown', e=>{
       const current = document.activeElement.closest('.cell'); if(!current) return;
       const idx = +current.dataset.index;
       if(e.key==='Enter' || e.key===' '){ e.preventDefault(); placeMark(idx, 'local'); return; }
-
       if(e.key==='ArrowRight' || e.key==='ArrowLeft' || e.key==='ArrowDown' || e.key==='ArrowUp'){
         e.preventDefault();
         let next = idx;
@@ -731,13 +848,11 @@
           next = e.key==='ArrowRight' ? (next%3<2?next+1:next-2)
                : e.key==='ArrowLeft'  ? (next%3>0?next-1:next+2)
                : e.key==='ArrowDown'  ? (next<6?next+3:next-6)
-               :          (next>2?next-3:next+6);
+               : /* ArrowUp */          (next>2?next-3:next+6);
           if(!cells[next].disabled){ cells[next].focus(); break; }
         }
       }
     });
-
-    // Raccourcis globaux : R=reset, Z/Ctrl+Z=undo
     window.addEventListener('keydown', e=>{
       if(e.target.closest('input,textarea,select,button,[contenteditable]')) return;
       if((e.key==='z'||e.key==='Z') && (e.ctrlKey || !e.metaKey) && !e.shiftKey){ e.preventDefault(); undo('local'); }
@@ -754,12 +869,8 @@
       updateSoundUI(); save();
     });
 
-    // === Modal en ligne (accessibilité + focus trap) ===
-    const modal = document.getElementById('onlineModal');
-    const closeModalBtn = document.getElementById('closeModal');
-    const nickInput = document.getElementById('nick');
-    const sideChip = document.getElementById('sideChip');
-
+    // === Modal (a11y + focus trap) ===
+    let prevFocus=null;
     function openModal(){
       modal.setAttribute('open','');
       modal.removeAttribute('aria-hidden');
@@ -777,8 +888,6 @@
     closeModalBtn.addEventListener('click', closeModal);
     modal.addEventListener('click', (e)=>{ if(e.target===modal) closeModal(); });
     window.addEventListener('keydown', (e)=>{ if(e.key==='Escape' && modal.hasAttribute('open')) closeModal(); });
-
-    let prevFocus=null;
     function trapTab(e){
       if(e.key!=='Tab') return;
       const f = modal.querySelectorAll('button, [href], input, textarea, select, [tabindex]:not([tabindex="-1"])');
@@ -788,11 +897,6 @@
       else if(!e.shiftKey && document.activeElement===last){ first.focus(); e.preventDefault(); }
     }
 
-    // === Onglets Créer / Rejoindre ===
-    const tabHost = document.getElementById('tabHost');
-    const tabJoin = document.getElementById('tabJoin');
-    const panelHost = document.getElementById('panelHost');
-    const panelJoin = document.getElementById('panelJoin');
     function switchTab(target){
       const isHost = target==='host';
       tabHost.setAttribute('aria-selected', String(isHost));
@@ -804,35 +908,7 @@
     tabHost.addEventListener('click', ()=>switchTab('host'));
     tabJoin.addEventListener('click', ()=>switchTab('join'));
 
-    // === Connexion WebRTC (copier-coller) ===
-    const hostCreateBtn = document.getElementById('hostCreateBtn');
-    const hostCopyBtn = document.getElementById('hostCopyBtn');
-    const hostOfferTA = document.getElementById('hostOffer');
-    const guestAnswerTA = document.getElementById('guestAnswer');
-    const applyAnswerBtn = document.getElementById('applyAnswerBtn');
-
-    const hostOfferInputTA = document.getElementById('hostOfferInput');
-    const joinAnswerTA = document.getElementById('joinAnswer');
-    const joinApplyOfferBtn = document.getElementById('joinApplyOfferBtn');
-    const joinCopyBtn = document.getElementById('joinCopyBtn');
-
-    const hostLinkBtn = document.getElementById('hostLinkBtn');
-    const joinLinkBtn = document.getElementById('joinLinkBtn');
-
-    // Base64 utils (UTF-8 safe)
-    const encode = (obj) => {
-      const json = JSON.stringify(obj);
-      const bytes = new TextEncoder().encode(json);
-      let bin=''; bytes.forEach(b=>bin+=String.fromCharCode(b));
-      return btoa(bin);
-    };
-    const decode = (str) => {
-      const bin = atob(str.trim());
-      const bytes = new Uint8Array([...bin].map(ch=>ch.charCodeAt(0)));
-      const json = new TextDecoder().decode(bytes);
-      return JSON.parse(json);
-    };
-
+    // === WebRTC (copier-coller + liens) ===
     const ICE_SERVERS = [{urls:'stun:stun.l.google.com:19302'}];
 
     function newPC(){
@@ -860,7 +936,7 @@
           if(pc.iceGatheringState==='complete'){ pc.removeEventListener('icegatheringstatechange', check); res(); }
         }
         pc.addEventListener('icegatheringstatechange', check);
-        setTimeout(()=>res(), 3000); // garde-fou
+        setTimeout(()=>res(), 3000);
       });
     }
 
@@ -871,7 +947,6 @@
         }
       }catch{}
     }
-
     function startPing(){
       stopPing();
       online.pingTimer = setInterval(()=>{
@@ -911,9 +986,7 @@
         online.connected = true;
         setNetChip('Connecté', true);
         send({t:'hello', nick: online.nick});
-        if(online.role==='host'){
-          send({t:'sync', state});
-        }
+        if(online.role==='host'){ send({t:'sync', state}); }
         startPing();
         updatePlayableHint();
       });
@@ -944,22 +1017,33 @@
       await waitIceDone(pc);
 
       const payload = {type:'offer', sdp: pc.localDescription.sdp, v:1};
-      hostOfferTA.value = encode(payload);
-      hostCopyBtn.disabled = false;
+      const b64 = encode(payload);
+      hostOfferTA.value = toUrlSafe(b64); // lisible/utilisable aussi en code
+      const link = makeInviteLink(payload);
+      hostOfferLinkTA.value = link;
+      hostCopyLinkBtn.disabled = false;
+      hostShareBtn.disabled = false;
       applyAnswerBtn.disabled = false;
       setNetChip('En attente de réponse…');
     });
 
-    hostCopyBtn.addEventListener('click', async ()=>{
-      await copy(hostOfferTA.value, hostCopyBtn);
+    hostCopyLinkBtn.addEventListener('click', async ()=>{
+      if(!hostOfferLinkTA.value) return;
+      await copyAny(hostOfferLinkTA.value, hostCopyLinkBtn);
+    });
+    hostShareBtn.addEventListener('click', async ()=>{
+      if(!hostOfferLinkTA.value) return;
+      await shareUrlOrCopy(hostOfferLinkTA.value, hostShareBtn, 'Rejoins ma partie de Tic‑Tac‑Toe+');
     });
 
     applyAnswerBtn.addEventListener('click', async ()=>{
       const raw = guestAnswerTA.value.trim(); if(!raw) return;
       try{
-        const ans = decode(raw);
+        const ans = decode(raw); // accepte base64 ou base64url
         if(ans.type!=='answer') throw new Error('Type invalide');
         await online.pc.setRemoteDescription({type:'answer', sdp: ans.sdp});
+        // Nettoie le hash “answer” si présent
+        history.replaceState(null,'',location.pathname + location.search);
         setNetChip('Connexion…');
       }catch(e){
         alert('Réponse invalide.');
@@ -984,21 +1068,27 @@
         await waitIceDone(pc);
 
         const payload = {type:'answer', sdp: pc.localDescription.sdp, v:1};
-        joinAnswerTA.value = encode(payload);
-        joinCopyBtn.disabled = false;
-        setNetChip('Réponse prête, envoie-la à l’hôte.');
+        const b64 = encode(payload);
+        joinAnswerTA.value = toUrlSafe(b64);
+        const link = makeAnswerLink(payload);
+        joinAnswerLinkTA.value = link;
+        joinCopyLinkBtn.disabled = true; // on réactive après remplissage setTimeout pour éviter double clic
+        joinShareBtn.disabled = true;
+        setTimeout(()=>{ joinCopyLinkBtn.disabled=false; joinShareBtn.disabled=false; }, 50);
+        setNetChip('Réponse prête, envoie le lien à l’hôte.');
       }catch(e){
         alert('Invitation invalide.');
       }
     });
 
-    joinCopyBtn.addEventListener('click', async ()=>{
-      await copy(joinAnswerTA.value, joinCopyBtn);
+    joinCopyLinkBtn.addEventListener('click', async ()=>{
+      if(!joinAnswerLinkTA.value) return;
+      await copyAny(joinAnswerLinkTA.value, joinCopyLinkBtn);
     });
-
-    // Liens de deep‑link (copier URL)
-    hostLinkBtn.addEventListener('click', ()=> copy(hostLink(), hostLinkBtn));
-    joinLinkBtn.addEventListener('click', ()=> copy(joinLink(), joinLinkBtn));
+    joinShareBtn.addEventListener('click', async ()=>{
+      if(!joinAnswerLinkTA.value) return;
+      await shareUrlOrCopy(joinAnswerLinkTA.value, joinShareBtn, 'Voici ma réponse Tic‑Tac‑Toe+');
+    });
 
     // Pseudo
     try{
@@ -1010,12 +1100,28 @@
       try{ localStorage.setItem(NICK_KEY, online.nick); }catch{}
     });
 
-    // === Deep‑link : ouvre la modale selon l’URL (?online=host|join ou #online) ===
+    // === Deep‑link URL (search/hash) ===
     (function deepLinkOnline(){
       const p = new URLSearchParams(location.search);
       if (p.get('online') === 'host') { openModal(); switchTab('host'); }
       else if (p.get('online') === 'join') { openModal(); switchTab('join'); }
-      else if (location.hash === '#online') { openModal(); }
+      // Hash “offer” → préremplir le champ invité
+      if(location.hash){
+        const hp = new URLSearchParams(location.hash.slice(1));
+        if(hp.get('offer')){
+          const offerStr = hp.get('offer');
+          openModal(); switchTab('join');
+          hostOfferInputTA.value = offerStr; // decode() acceptera base64url
+          // On ne lance pas automatiquement, l’utilisateur reste maître du clic
+        }
+        if(hp.get('answer')){
+          const answerStr = hp.get('answer');
+          openModal(); switchTab('host');
+          guestAnswerTA.value = answerStr; // decode() gère base64url
+          // Auto-validation pour fluidifier (pas de permission requise)
+          applyAnswerBtn.click();
+        }
+      }
     })();
 
     // === Init ===
