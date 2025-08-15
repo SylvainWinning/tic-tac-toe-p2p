@@ -171,7 +171,8 @@
     .btn.ghost{background: color-mix(in oklab, var(--surface-strong) 80%, transparent); color:var(--text); box-shadow:none}
     .btn[disabled], .iconbtn[disabled]{opacity:.6;cursor:not-allowed}
 
-    .empty{position:absolute;inset:0;display:grid;place-items:center;pointer-events:none;transition: opacity var(--t-slow) ease}
+    /* État vide (fix z-index) */
+    .empty{position:absolute;inset:0;display:grid;place-items:center;pointer-events:none;transition: opacity var(--t-slow) ease; z-index:6}
     .empty.hide{opacity:0}
     .empty .cardlet{
       display:grid;gap:10px;place-items:center;text-align:center;
@@ -200,6 +201,36 @@
     @keyframes pop{0%{transform:scale(.6);opacity:.2}70%{transform:scale(1.1);opacity:1}100%{transform:scale(1)}}
     .pop{animation: pop var(--t-slow) var(--spring-1)}
 
+    /* === Win screen === */
+    .winscreen{
+      position:absolute; inset:0; z-index:8;
+      display:grid; place-items:center;
+      background:
+        linear-gradient(180deg, color-mix(in oklab, var(--surface) 70%, transparent), transparent 60%),
+        radial-gradient(1200px 480px at 50% -10%, var(--accent-ghost), transparent 60%);
+      backdrop-filter: blur(calc(var(--glass-blur) * .8));
+      opacity:0; pointer-events:none;
+      transition: opacity var(--t-slow) ease;
+    }
+    .winscreen.show{opacity:1; pointer-events:auto}
+    .winscreen .cardlet{
+      display:grid; gap:12px; place-items:center; text-align:center;
+      padding: clamp(22px, 4vw, 36px);
+      background: color-mix(in oklab, var(--surface) 96%, transparent);
+      border:1px solid var(--line); border-radius:20px; box-shadow:var(--shadow-lift);
+    }
+    .winscreen h3{margin:4px 0 0; font-size:clamp(1.2rem, 1rem + 1.2vw, 1.6rem)}
+    .winmark{width:min(120px, 34vmin);height:min(120px, 34vmin)}
+    .winscreen .actions{justify-content:center}
+
+    /* Confettis (désactivés en reduce motion) */
+    .confetti{position:fixed; inset:0; pointer-events:none; overflow:hidden; z-index:70}
+    .confetti i{position:absolute; top:-12px; width:10px; height:14px; border-radius:4px; opacity:0; animation: conf-fall 1200ms ease-out forwards}
+    @keyframes conf-fall{
+      0%{transform: translateY(-12px) rotate(0deg); opacity:1}
+      100%{transform: translateY(110vh) rotate(720deg); opacity:0}
+    }
+
     /* Tactile & motion */
     @media (pointer: coarse){
       .cell:hover,.btn:hover,.iconbtn:hover{transform:none}
@@ -207,6 +238,7 @@
     @media (prefers-reduced-motion: reduce){
       .iconbtn,.btn,.cell{transition:none}
       .pop{animation:none}
+      .confetti, .confetti i{display:none}
     }
 
     /* === Modale en ligne (scroll indépendant + scroll lock) === */
@@ -217,7 +249,6 @@
       backdrop-filter:saturate(120%) blur(2px);
       opacity:0; pointer-events:none;
       transition:opacity var(--t-slow) ease; z-index:50;
-      /* Empêche le scrolling/bounce de se propager à la page derrière */
       overscroll-behavior: contain;
     }
     .modal[open]{opacity:1; pointer-events:auto}
@@ -232,7 +263,6 @@
       padding: clamp(var(--s-4), 3vw, var(--s-6));
       display:grid; gap: var(--s-3);
       position:relative;
-      /* >>> Scroll interne pour mobile <<< */
       max-height: min(92svh, 92dvh);
       overflow: auto;
       -webkit-overflow-scrolling: touch;
@@ -258,6 +288,7 @@
 
     /* === Scroll lock quand modale ouverte === */
     html.modal-open, body.modal-open{overflow:hidden; height:100%}
+
     /* === Fallback sans OKLCH / color-mix === */
     @supports not (color: oklch(50% 0 0)) or not (background: color-mix(in oklab, #000 10%, transparent)) {
       :root{
@@ -322,6 +353,7 @@
     </section>
 
     <main class="card" role="region" aria-label="Plateau de jeu">
+      <!-- État vide -->
       <div class="empty" id="emptyState" aria-hidden="false">
         <div class="cardlet" id="hint">
           <svg viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" opacity=".9"><rect x="3.5" y="3.5" width="17" height="17" rx="3"/><path d="M8 3.5v17M16 3.5v17M3.5 8h17M3.5 16h17"/></g></svg>
@@ -330,6 +362,7 @@
         </div>
       </div>
 
+      <!-- Grille -->
       <div class="board" id="board" role="grid" aria-label="Grille 3 par 3" aria-rowcount="3" aria-colcount="3" aria-describedby="hint">
         <button class="cell" type="button" aria-label="Case 1" role="gridcell" aria-rowindex="1" aria-colindex="1" data-index="0"></button>
         <button class="cell" type="button" aria-label="Case 2" role="gridcell" aria-rowindex="1" aria-colindex="2" data-index="1"></button>
@@ -356,6 +389,20 @@
         </div>
       </div>
       <div id="live" class="sr-only" aria-live="polite"></div>
+
+      <!-- Win screen -->
+      <div class="winscreen" id="winScreen" aria-hidden="true">
+        <div class="cardlet" role="dialog" aria-labelledby="winTitle" aria-modal="false">
+          <div id="winIcon" class="winmark" aria-hidden="true"></div>
+          <h3 id="winTitle">Victoire !</h3>
+          <div class="actions" style="gap:10px">
+            <button class="btn" id="playAgainBtn" type="button">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></g></svg>
+              Rejouer
+            </button>
+          </div>
+        </div>
+      </div>
     </main>
 
     <footer>Fait avec ♥ — solo, local ou en ligne (P2P). Thème auto, a11y et micro‑interactions.</footer>
@@ -451,6 +498,9 @@
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
+  <!-- Confettis (calque global) -->
+  <div class="confetti" id="confetti" aria-hidden="true"></div>
+
   <script>
     // === Sélecteurs ===
     const boardEl = document.getElementById('board');
@@ -459,6 +509,12 @@
     const progress = document.getElementById('progress');
     const progressFill = document.getElementById('progressFill');
     const emptyState = document.getElementById('emptyState');
+    const winScreen = document.getElementById('winScreen');
+    const winTitle = document.getElementById('winTitle');
+    const winIcon = document.getElementById('winIcon');
+    const playAgainBtn = document.getElementById('playAgainBtn');
+    const confettiLayer = document.getElementById('confetti');
+
     const resetBtn = document.getElementById('resetBtn');
     const resetSeriesBtn = document.getElementById('resetSeriesBtn');
     const undoBtn = document.getElementById('undoBtn');
@@ -588,6 +644,14 @@
         ? '<svg class="mark x pop" viewBox="0 0 100 100" aria-hidden="true"><path d="M22 22L78 78M78 22L22 78"/></svg>'
         : '<svg class="mark o pop" viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="28"/></svg>';
     }
+    function svgBigMark(m){
+      return m==='X'
+        ? '<svg class="winmark" viewBox="0 0 100 100" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="10" stroke-linecap="round" style="color:var(--x-color)"><path d="M22 22L78 78M78 22L22 78"/></g></svg>'
+        : '<svg class="winmark" viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="28" stroke="currentColor" stroke-width="10" fill="none" style="color:var(--o-color)"/></svg>';
+    }
+    function svgDraw(){
+      return '<svg class="winmark" viewBox="0 0 100 100" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="10" stroke-linecap="round" style="color:var(--accent)"><path d="M20 50H80"/></g></svg>';
+    }
     function animateNum(el){
       const target = +el.textContent + 1, start = performance.now(), sVal = target-1, dur = 420;
       function tick(t){
@@ -693,9 +757,11 @@
           cells[i].setAttribute('aria-label', `Case ${i+1}, ${state.board[i]}, gagnante`);
         });
         setTurnLabel(`Victoire de <strong>${win.player}</strong> !`);
+        showWinScreen(win.player); // <-- nouveau
       }else if(state.moves===9){
         state.lock = true;
         setTurnLabel(`Match <strong>nul</strong>.`);
+        showWinScreen(null);       // <-- nouveau
       }else{
         setTurnLabel(`C’est à <strong>${state.player}</strong> de jouer.`);
       }
@@ -720,6 +786,54 @@
       hydrateBoard();
     }
 
+    // === Effets victoire (win screen + confettis) ===
+    function showWinScreen(who /* 'X' | 'O' | null */){
+      // Icône + titre
+      if(who==='X' || who==='O'){
+        winIcon.innerHTML = svgBigMark(who);
+        winTitle.innerHTML = `Victoire de <strong>${who}</strong> !`;
+      }else{
+        winIcon.innerHTML = svgDraw();
+        winTitle.innerHTML = `Match <strong>nul</strong>.`;
+      }
+      // Anim + sons/haptique
+      if(who==='X') Audio.ping(760,.10);
+      else if(who==='O') Audio.ping(640,.10);
+      else Audio.ping(560,.10);
+      haptic([10,30,10]);
+
+      // Afficher le calque
+      winScreen.classList.add('show');
+      winScreen.setAttribute('aria-hidden','false');
+      setTimeout(()=>playAgainBtn.focus(),120);
+
+      // Confettis (désactivés en reduce-motion)
+      launchConfetti(who);
+    }
+    function hideWinScreen(){
+      winScreen.classList.remove('show');
+      winScreen.setAttribute('aria-hidden','true');
+    }
+    function launchConfetti(who){
+      try{
+        if(window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+        const n = 42;
+        const colors = who==='X' ? ['var(--x-color)','oklch(80% 0.10 330)','var(--accent)']
+                                 : who==='O' ? ['var(--o-color)','oklch(86% 0.08 210)','var(--accent)']
+                                             : ['var(--accent)','var(--accent-300)','oklch(75% 0.04 250)'];
+        for(let i=0;i<n;i++){
+          const p = document.createElement('i');
+          p.style.left = Math.random()*100 + 'vw';
+          p.style.background = colors[i%colors.length];
+          p.style.animationDelay = (Math.random()*0.25)+'s';
+          p.style.transform = 'translateY(-12px) rotate(0deg)';
+          confettiLayer.appendChild(p);
+          setTimeout(()=>p.remove(), 1500);
+        }
+      }catch{}
+    }
+    playAgainBtn.addEventListener('click', ()=>{ hideWinScreen(); resetBoard(true,'local'); });
+
     // === Jeu (source: 'local' | 'remote') ===
     function placeMark(idx, source='local'){
       if(state.lock || state.board[idx]) return;
@@ -731,6 +845,9 @@
       cells[idx].innerHTML = svgMark(state.player);
       cells[idx].setAttribute('aria-label', `Case ${idx+1}, ${state.player}`);
       cells[idx].disabled = true;
+
+      // Son léger par symbole
+      if(state.player==='X') Audio.ping(680,.05); else Audio.ping(430,.05);
 
       const win = checkWin();
       if(win){ endGame(win, source); }
@@ -758,6 +875,10 @@
       setTurnLabel(result ? `Victoire de <strong>${result.player}</strong> !` : `Match <strong>nul</strong>.`);
       setTimeout(()=>resetBtn.focus(),120);
       save();
+
+      // Win screen + confettis
+      showWinScreen(result ? result.player : null);
+
       if(online.connected && source==='local'){ send({t:'end'}); }
     }
     function resetBoard(keepScores=true, source='local'){
@@ -765,11 +886,12 @@
       cells.forEach((c,i)=>{ c.innerHTML=''; c.classList.remove('win'); c.disabled=false; c.setAttribute('aria-label',`Case ${i+1}`) });
       setTurnLabel(`C’est à <strong>${state.player}</strong> de jouer.`); updateProgress();
       if(!keepScores){ state.scores={X:0,O:0,D:0}; state.starter='X'; renderScores(); }
-      emptyState.classList.remove('hide'); undoBtn.disabled=true; save();
+      emptyState.classList.remove('hide'); undoBtn.disabled=true; hideWinScreen(); save();
       if(online.connected && source==='local'){ send({t:'reset', keepScores}); }
     }
     function undo(source='local'){
       if(state.history.length===0) return;
+      hideWinScreen();
       state.lock=false;
       const idx=state.history.pop();
       state.board[idx]=null; state.moves--; cells[idx].innerHTML=''; cells[idx].classList.remove('win'); cells[idx].disabled=false;
@@ -819,7 +941,6 @@
       scrollLock.y = window.scrollY || document.documentElement.scrollTop || 0;
       document.documentElement.classList.add('modal-open');
       document.body.classList.add('modal-open');
-      // Fix iOS : body en position:fixed pour empêcher le scroll derrière
       document.body.style.position='fixed';
       document.body.style.top = `-${scrollLock.y}px`;
       document.body.style.left='0'; document.body.style.right='0'; document.body.style.width='100%';
@@ -884,7 +1005,6 @@
           online.connected = true;
           setNetChip('Connecté', true);
           startPing();
-          // NE FERME PLUS LA MODALE AUTOMATIQUEMENT
         }else if(s==='disconnected'){
           setNetChip('Déconnecté'); stopPing();
         }else if(s==='failed'){
@@ -964,7 +1084,6 @@
         await online.pc.setRemoteDescription({type:'answer', sdp: ans.sdp});
         history.replaceState(null,'',location.pathname + location.search); // nettoie #answer
         setNetChip('Connexion…');
-        // NE PAS fermer la modale ici
       }catch(e){ alert('Réponse invalide.'); }
     });
 
@@ -983,7 +1102,6 @@
         const link = makeAnswerLink(payload); joinAnswerLinkTA.value = link;
         joinCopyLinkBtn.disabled=false; joinShareBtn.disabled=false;
         setNetChip('Réponse prête, envoie le lien à l’hôte.');
-        // NE PAS fermer la modale ici
       }catch(e){ alert('Invitation invalide.'); }
     });
     joinCopyLinkBtn.addEventListener('click', async ()=>{ if(!joinAnswerLinkTA.value) return; await copyAny(joinAnswerLinkTA.value, joinCopyLinkBtn); });
